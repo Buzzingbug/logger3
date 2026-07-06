@@ -60,9 +60,15 @@ importers:
       '@logger/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      drizzle-orm:
+        specifier: latest
+        version: 0.45.2(postgres@3.4.9)
       next:
         specifier: latest
         version: 16.2.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      postgres:
+        specifier: latest
+        version: 3.4.9
       react:
         specifier: latest
         version: 19.2.7
@@ -76,6 +82,34 @@ importers:
       '@types/react-dom':
         specifier: latest
         version: 19.2.3(@types/react@19.2.17)
+
+  apps/worker:
+    dependencies:
+      '@logger/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@logger/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      bullmq:
+        specifier: latest
+        version: 5.79.2
+      discord.js:
+        specifier: latest
+        version: 14.26.4
+      drizzle-orm:
+        specifier: latest
+        version: 0.45.2(postgres@3.4.9)
+      ioredis:
+        specifier: 5.10.1
+        version: 5.10.1
+      pino:
+        specifier: latest
+        version: 10.3.1
+    devDependencies:
+      tsx:
+        specifier: latest
+        version: 4.23.0
 
   packages/db:
     dependencies:

@@ -6,23 +6,29 @@ World-class Discord logging bot built for Railway, Postgres, Redis, and 100+ gui
 
 - `apps/bot`: Discord gateway worker and slash commands.
 - `apps/web`: Next.js dashboard.
+- `apps/worker`: BullMQ log delivery worker.
 - `packages/db`: Drizzle schema and database access.
 - `packages/shared`: shared config, constants, and helpers.
-
-## Phase 1 Setup
-
-1. Create a Discord application and bot in the Discord Developer Portal.
-2. Enable required privileged intents: Server Members and Message Content.
-3. Create Railway services: web, bot, worker later, Postgres, Redis.
-4. Add environment variables from `.env.example`.
-5. Install dependencies with `pnpm install`.
-6. Run `pnpm dev:bot` and `pnpm dev:web` locally.
 
 ## Railway Start Commands
 
 - Web service: `pnpm --filter @logger/web start`
 - Bot service: `pnpm --filter @logger/bot start`
+- Worker service: `pnpm --filter @logger/worker start`
+
+## Required Environment Variables
+
+Use Railway variables for all real values. `.env.example` is only a local reference.
+
+- `DISCORD_TOKEN`
+- `DISCORD_CLIENT_ID`
+- `DISCORD_CLIENT_SECRET`
+- `DISCORD_REDIRECT_URI`
+- `DATABASE_URL`
+- `REDIS_URL`
+- `SESSION_SECRET`
+- `PUBLIC_APP_URL`
 
 ## Current Status
 
-Phase 1 scaffold is ready. Next step is dependency install, migrations, OAuth, and real Discord login smoke test.
+Phase 1 is complete. Phase 2 has core log capture, persistence, queue delivery, and a worker service scaffold.

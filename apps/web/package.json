@@ -15,7 +15,9 @@
     "@logger/shared": "workspace:*",
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "drizzle-orm": "latest",
+    "postgres": "latest"
   },
   "devDependencies": {
     "@types/react": "latest",

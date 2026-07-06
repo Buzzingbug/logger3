@@ -12,7 +12,9 @@
     "db:generate": "pnpm --filter @logger/db db:generate",
     "db:migrate": "pnpm --filter @logger/db db:migrate",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "dev:worker": "pnpm --filter @logger/worker dev",
+    "worker:start": "pnpm --filter @logger/worker start"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { LOG_EVENT_TYPES } from "@logger/shared";
+import { eq } from "drizzle-orm";
+import { LOG_EVENT_LABELS, LOG_EVENT_TYPES } from "@logger/shared";
+import { createWebDb, guildSettings, logEvents } from "../../../lib/db";
 import { getSession } from "../../../lib/session";
 
 export default async function GuildDashboardPage({
@@ -12,6 +14,17 @@ export default async function GuildDashboardPage({
   if (!session) redirect("/login");
 
   const { guildId } = await params;
+  const db = process.env.DATABASE_URL ? createWebDb() : null;
+  const settings = db
+    ? await db.query.guildSettings.findFirst({ where: eq(guildSettings.guildId, guildId) })
+    : null;
+  const recentLogs = db
+    ? await db.query.logEvents.findMany({
+        where: eq(logEvents.guildId, guildId),
+        orderBy: (table, { desc }) => [desc(table.createdAt)],
+        limit: 20
+      })
+    : [];
 
   return (
     <main className="workspace">
@@ -28,24 +41,37 @@ export default async function GuildDashboardPage({
 
       <section className="grid">
         <article>
-          <h2>Routes</h2>
-          <p>Channel routing controls land here next.</p>
+          <h2>Default Channel</h2>
+          <p>
+            {settings?.defaultLogChannelId
+              ? `<#${settings.defaultLogChannelId}>`
+              : "Not configured"}
+          </p>
         </article>
         <article>
-          <h2>Ignored entities</h2>
-          <p>Role, user, channel, bot, and webhook ignores land here next.</p>
+          <h2>Retention</h2>
+          <p>{settings?.retentionDays ?? 30} days</p>
         </article>
         <article>
-          <h2>Diagnostics</h2>
-          <p>Permission checks and queue health land here next.</p>
+          <h2>Recent Logs</h2>
+          <p>{recentLogs.length} stored events</p>
         </article>
       </section>
 
       <section className="eventList">
         {LOG_EVENT_TYPES.map((type) => (
           <div className="eventRow" key={type}>
-            <span>{type}</span>
-            <strong>Enabled</strong>
+            <span>{LOG_EVENT_LABELS[type]}</span>
+            <strong>Ready</strong>
+          </div>
+        ))}
+      </section>
+
+      <section className="eventList">
+        {recentLogs.map((event) => (
+          <div className="eventRow" key={event.id}>
+            <span>{LOG_EVENT_LABELS[event.type]}</span>
+            <strong>{event.createdAt.toLocaleString()}</strong>
           </div>
         ))}
       </section>
