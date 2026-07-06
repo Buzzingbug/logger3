@@ -175,3 +175,64 @@ article,
     flex-direction: column;
   }
 }
+
+.configForm,
+.routeRow {
+  border: 1px solid #2b313d;
+  border-radius: 8px;
+  background: #151922;
+}
+
+.configForm {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 24px 0;
+  padding: 20px;
+}
+
+.configForm label,
+.toggleLine {
+  color: #dbe4f0;
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+input {
+  width: 100%;
+  border: 1px solid #344055;
+  border-radius: 6px;
+  background: #0f1115;
+  color: #f4f7fb;
+  padding: 10px 12px;
+}
+
+button {
+  cursor: pointer;
+}
+
+.routeRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 320px);
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+}
+
+.toggleLine {
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+}
+
+.toggleLine input {
+  width: 18px;
+  height: 18px;
+}
+
+@media (max-width: 720px) {
+  .routeRow {
+    grid-template-columns: 1fr;
+  }
+}
