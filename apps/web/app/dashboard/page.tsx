@@ -1,23 +1,42 @@
-export default function DashboardPage() {
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { fetchManageableGuilds, guildIconUrl } from "../../lib/discord";
+import { getSession } from "../../lib/session";
+
+export default async function DashboardPage() {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const guilds = await fetchManageableGuilds(session.accessToken);
+
   return (
     <main className="workspace">
-      <header>
-        <p className="eyebrow">Phase 1</p>
-        <h1>Dashboard Shell</h1>
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">Dashboard</p>
+          <h1>Select a server</h1>
+          <p className="copy">
+            Signed in as {session.displayName}. Showing servers you can manage.
+          </p>
+        </div>
+        <Link className="button secondary" href="/api/auth/logout">
+          Logout
+        </Link>
       </header>
-      <section className="grid">
-        <article>
-          <h2>Guilds</h2>
-          <p>Discord OAuth guild selection lands here.</p>
-        </article>
-        <article>
-          <h2>Logging</h2>
-          <p>Per-event routes, toggles, ignores, and previews land here.</p>
-        </article>
-        <article>
-          <h2>Diagnostics</h2>
-          <p>Permissions, queues, and delivery health land here.</p>
-        </article>
+
+      <section className="guildGrid">
+        {guilds.map((guild) => {
+          const iconUrl = guildIconUrl(guild);
+          return (
+            <Link className="guildCard" href={`/dashboard/${guild.id}`} key={guild.id}>
+              {iconUrl ? <img src={iconUrl} alt="" /> : <span>{guild.name.slice(0, 2)}</span>}
+              <div>
+                <h2>{guild.name}</h2>
+                <p>{guild.owner ? "Owner" : "Manage Server"}</p>
+              </div>
+            </Link>
+          );
+        })}
       </section>
     </main>
   );

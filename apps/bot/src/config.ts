@@ -19,5 +19,11 @@ export const botConfig = {
     GatewayIntentBits.GuildExpressions,
     GatewayIntentBits.GuildScheduledEvents
   ],
-  partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember, Partials.User]
+  partials: [
+    Partials.Message,
+    Partials.Channel,
+    Partials.Reaction,
+    Partials.GuildMember,
+    Partials.User
+  ]
 };

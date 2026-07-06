@@ -7,13 +7,19 @@
     "build": "pnpm -r build",
     "dev:bot": "pnpm --filter @logger/bot dev",
     "dev:web": "pnpm --filter @logger/web dev",
-    "lint": "pnpm -r lint",
+    "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "db:generate": "pnpm --filter @logger/db db:generate",
-    "db:migrate": "pnpm --filter @logger/db db:migrate"
+    "db:migrate": "pnpm --filter @logger/db db:migrate",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "latest",
-    "typescript": "latest"
+    "eslint": "^10.6.0",
+    "prettier": "^3.9.4",
+    "typescript": "latest",
+    "typescript-eslint": "^8.62.1"
   }
 }
