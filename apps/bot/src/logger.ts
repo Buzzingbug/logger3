@@ -12,10 +12,14 @@ export type CaptureLogInput = {
   targetId?: string | null;
   channelId?: string | null;
   messageId?: string | null;
+  roleIds?: string[];
+  isBot?: boolean;
   payload?: LogPayload;
 };
 
 export async function captureLog(db: Db, queue: Queue<LogDeliveryJob>, input: CaptureLogInput) {
+  if (!(await shouldCaptureLog(db, input))) return null;
+
   const [event] = await db
     .insert(logEvents)
     .values({
@@ -37,6 +41,30 @@ export async function captureLog(db: Db, queue: Queue<LogDeliveryJob>, input: Ca
     { attempts: 5, backoff: { type: "exponential", delay: 3000 } }
   );
   return event.id;
+}
+
+async function shouldCaptureLog(db: Db, input: CaptureLogInput) {
+  const settings = await db.query.guildSettings.findFirst({
+    where: (table, { eq }) => eq(table.guildId, input.guildId)
+  });
+  if (settings && !settings.enabled) return false;
+
+  const ignored = await db.query.ignoredEntities.findMany({
+    where: (table, { eq }) => eq(table.guildId, input.guildId)
+  });
+  if (ignored.length === 0) return true;
+
+  const ignoredKeys = new Set(ignored.map((entry) => `${entry.entityType}:${entry.entityId}`));
+  if (input.actorId && ignoredKeys.has(`user:${input.actorId}`)) return false;
+  if (input.targetId && ignoredKeys.has(`user:${input.targetId}`)) return false;
+  if (input.channelId && ignoredKeys.has(`channel:${input.channelId}`)) return false;
+  if (input.isBot && ignoredKeys.has("bot:*")) return false;
+
+  for (const roleId of input.roleIds ?? []) {
+    if (ignoredKeys.has(`role:${roleId}`)) return false;
+  }
+
+  return true;
 }
 
 export function userTag(user: { id: string; tag?: string | null; username?: string | null }) {

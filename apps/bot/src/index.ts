@@ -78,6 +78,7 @@ client.on(Events.MessageDelete, async (message) => {
     targetId: message.author?.id ?? null,
     channelId: message.channelId,
     messageId: message.id,
+    roleIds: message.member?.roles.cache.map((role) => role.id) ?? [],
     payload: {
       author: message.author ? userTag(message.author) : "Unknown",
       content: message.partial ? null : message.content,
@@ -98,6 +99,7 @@ client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
     targetId: newMessage.author?.id ?? null,
     channelId: newMessage.channelId,
     messageId: newMessage.id,
+    roleIds: newMessage.member?.roles.cache.map((role) => role.id) ?? [],
     payload: {
       author: newMessage.author ? userTag(newMessage.author) : "Unknown",
       before: oldMessage.content,
@@ -123,6 +125,8 @@ client.on(Events.GuildMemberAdd, async (member) => {
     type: "member.join",
     guildId: member.guild.id,
     targetId: member.id,
+    roleIds: member.roles.cache.map((role) => role.id),
+    isBot: member.user.bot,
     payload: { user: userTag(member.user), createdAt: member.user.createdAt.toISOString() }
   });
 });
@@ -132,6 +136,8 @@ client.on(Events.GuildMemberRemove, async (member) => {
     type: "member.leave",
     guildId: member.guild.id,
     targetId: member.id,
+    roleIds: member.roles.cache.map((role) => role.id),
+    isBot: member.user?.bot ?? false,
     payload: { user: member.user ? userTag(member.user) : member.id }
   });
 });
@@ -143,6 +149,7 @@ client.on(Events.GuildBanAdd, async (ban) => {
     guildId: ban.guild.id,
     actorId: audit?.executorId ?? null,
     targetId: ban.user.id,
+    isBot: ban.user.bot,
     payload: { user: userTag(ban.user), reason: ban.reason ?? audit?.reason ?? null }
   });
 });
@@ -154,6 +161,7 @@ client.on(Events.GuildBanRemove, async (ban) => {
     guildId: ban.guild.id,
     actorId: audit?.executorId ?? null,
     targetId: ban.user.id,
+    isBot: ban.user.bot,
     payload: { user: userTag(ban.user), reason: audit?.reason ?? null }
   });
 });
@@ -195,6 +203,8 @@ async function captureRoleDiff(
         type: "member.role_add",
         guildId: newMember.guild.id,
         targetId: newMember.id,
+        roleIds: [role.id],
+        isBot: newMember.user.bot,
         payload: { user: userTag(newMember.user), roleId: role.id, roleName: role.name }
       });
     }
@@ -206,6 +216,8 @@ async function captureRoleDiff(
         type: "member.role_remove",
         guildId: newMember.guild.id,
         targetId: newMember.id,
+        roleIds: [role.id],
+        isBot: newMember.user.bot,
         payload: { user: userTag(newMember.user), roleId: role.id, roleName: role.name }
       });
     }
@@ -224,6 +236,8 @@ async function captureTimeoutDiff(
     type: "moderation.timeout",
     guildId: newMember.guild.id,
     targetId: newMember.id,
+    roleIds: newMember.roles.cache.map((role) => role.id),
+    isBot: newMember.user.bot,
     payload: {
       user: userTag(newMember.user),
       until: newUntil ? new Date(newUntil).toISOString() : null

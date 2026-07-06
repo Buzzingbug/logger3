@@ -2,8 +2,19 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { LOG_EVENT_LABELS, LOG_EVENT_TYPES } from "@logger/shared";
-import { createWebDb, guildLogRoutes, guildSettings, logEvents } from "../../../lib/db";
+import {
+  IGNORED_ENTITY_TYPES,
+  LOG_EVENT_LABELS,
+  LOG_EVENT_TYPES,
+  type IgnoredEntityType
+} from "@logger/shared";
+import {
+  createWebDb,
+  guildLogRoutes,
+  guildSettings,
+  ignoredEntities,
+  logEvents
+} from "../../../lib/db";
 import { getSession } from "../../../lib/session";
 
 export default async function GuildDashboardPage({
@@ -21,6 +32,12 @@ export default async function GuildDashboardPage({
     : null;
   const routes = db
     ? await db.query.guildLogRoutes.findMany({ where: eq(guildLogRoutes.guildId, guildId) })
+    : [];
+  const ignored = db
+    ? await db.query.ignoredEntities.findMany({
+        where: eq(ignoredEntities.guildId, guildId),
+        orderBy: (table, { asc }) => [asc(table.entityType), asc(table.entityId)]
+      })
     : [];
   const recentLogs = db
     ? await db.query.logEvents.findMany({
@@ -64,6 +81,43 @@ export default async function GuildDashboardPage({
           set: { enabled, channelId, updatedAt: new Date() }
         });
     }
+
+    revalidatePath(`/dashboard/${guildId}`);
+  }
+
+  async function addIgnoreRule(formData: FormData) {
+    "use server";
+    await requireSession();
+    const writeDb = createWebDb();
+    const entityType = cleanIgnoreType(formData.get("entityType"));
+    const entityId = cleanIgnoredEntityId(entityType, formData.get("entityId"));
+    const reason = cleanReason(formData.get("reason"));
+
+    if (!entityType || !entityId) return;
+
+    await writeDb
+      .insert(ignoredEntities)
+      .values({ guildId, entityType, entityId, reason })
+      .onConflictDoUpdate({
+        target: [ignoredEntities.guildId, ignoredEntities.entityType, ignoredEntities.entityId],
+        set: { reason }
+      });
+
+    revalidatePath(`/dashboard/${guildId}`);
+  }
+
+  async function removeIgnoreRule(formData: FormData) {
+    "use server";
+    await requireSession();
+    const writeDb = createWebDb();
+    const entityType = cleanIgnoreType(formData.get("entityType"));
+    const entityId = cleanIgnoredEntityId(entityType, formData.get("entityId"));
+
+    if (!entityType || !entityId) return;
+
+    await writeDb
+      .delete(ignoredEntities)
+      .where(eq(ignoredEntities.id, String(formData.get("ignoreId") ?? "")));
 
     revalidatePath(`/dashboard/${guildId}`);
   }
@@ -152,6 +206,55 @@ export default async function GuildDashboardPage({
         </button>
       </form>
 
+      <section className="ignorePanel">
+        <form className="configForm" action={addIgnoreRule}>
+          <label>
+            Ignore type
+            <select name="entityType" defaultValue="user">
+              {IGNORED_ENTITY_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Entity ID
+            <input name="entityId" placeholder="User, role, or channel ID. Use * for bots." />
+          </label>
+          <label>
+            Reason
+            <input name="reason" placeholder="Optional note" />
+          </label>
+          <button className="button" type="submit">
+            Add Ignore Rule
+          </button>
+        </form>
+
+        <div className="eventList">
+          {ignored.length === 0 ? (
+            <div className="eventRow">
+              <span>No ignore rules yet</span>
+              <strong>Active capture</strong>
+            </div>
+          ) : (
+            ignored.map((entry) => (
+              <form className="ignoreRow" action={removeIgnoreRule} key={entry.id}>
+                <input name="ignoreId" type="hidden" value={entry.id} />
+                <input name="entityType" type="hidden" value={entry.entityType} />
+                <input name="entityId" type="hidden" value={entry.entityId} />
+                <span>{entry.entityType}</span>
+                <span>{entry.entityId}</span>
+                <span>{entry.reason ?? "No reason"}</span>
+                <button className="button secondary" type="submit">
+                  Remove
+                </button>
+              </form>
+            ))
+          )}
+        </div>
+      </section>
+
       <section className="eventList">
         {recentLogs.map((event) => (
           <div className="eventRow" key={event.id}>
@@ -177,4 +280,23 @@ function cleanSnowflake(value: FormDataEntryValue | null) {
 function clamp(value: number, min: number, max: number) {
   if (!Number.isFinite(value)) return min;
   return Math.min(Math.max(Math.trunc(value), min), max);
+}
+
+function cleanIgnoreType(value: FormDataEntryValue | null): IgnoredEntityType | null {
+  return IGNORED_ENTITY_TYPES.find((type) => type === value) ?? null;
+}
+
+function cleanIgnoredEntityId(
+  entityType: IgnoredEntityType | null,
+  value: FormDataEntryValue | null
+) {
+  const text = String(value ?? "").trim();
+  if (!entityType) return null;
+  if (entityType === "bot") return text === "*" ? "*" : null;
+  return /^\d{15,25}$/.test(text) ? text : null;
+}
+
+function cleanReason(value: FormDataEntryValue | null) {
+  const text = String(value ?? "").trim();
+  return text.length > 0 ? text.slice(0, 200) : null;
 }

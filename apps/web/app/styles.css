@@ -209,6 +209,15 @@ input {
   padding: 10px 12px;
 }
 
+select {
+  width: 100%;
+  border: 1px solid #344055;
+  border-radius: 6px;
+  background: #0f1115;
+  color: #f4f7fb;
+  padding: 10px 12px;
+}
+
 button {
   cursor: pointer;
 }
@@ -231,8 +240,29 @@ button {
   height: 18px;
 }
 
+.ignorePanel {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.ignoreRow {
+  display: grid;
+  grid-template-columns: 100px minmax(140px, 1fr) minmax(180px, 1fr) 100px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #2b313d;
+  border-radius: 8px;
+  background: #151922;
+}
+
 @media (max-width: 720px) {
   .routeRow {
+    grid-template-columns: 1fr;
+  }
+
+  .ignoreRow {
     grid-template-columns: 1fr;
   }
 }

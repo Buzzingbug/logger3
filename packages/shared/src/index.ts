@@ -32,6 +32,10 @@ export type LogDeliveryJob = {
   guildId: string;
 };
 
+export const IGNORED_ENTITY_TYPES = ["user", "channel", "role", "bot"] as const;
+
+export type IgnoredEntityType = (typeof IGNORED_ENTITY_TYPES)[number];
+
 export const LOG_EVENT_LABELS: Record<LogEventType, string> = {
   "message.delete": "Message Deleted",
   "message.update": "Message Edited",
