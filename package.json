@@ -1,0 +1,19 @@
+{
+  "name": "logger-bot",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.13.1",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev:bot": "pnpm --filter @logger/bot dev",
+    "dev:web": "pnpm --filter @logger/web dev",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @logger/db db:generate",
+    "db:migrate": "pnpm --filter @logger/db db:migrate"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "typescript": "latest"
+  }
+}
