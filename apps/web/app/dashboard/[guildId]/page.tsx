@@ -16,6 +16,7 @@ import {
   logEvents
 } from "../../../lib/db";
 import { getSession } from "../../../lib/session";
+import { getGuildDiagnostics } from "../../../lib/bot-discord";
 
 export default async function GuildDashboardPage({
   params
@@ -123,6 +124,11 @@ export default async function GuildDashboardPage({
   }
 
   const routeMap = new Map(routes.map((route) => [route.type, route]));
+  const diagnosticChannelIds = [
+    settings?.defaultLogChannelId,
+    ...routes.filter((route) => route.enabled).map((route) => route.channelId)
+  ];
+  const diagnostics = await getGuildDiagnostics(guildId, diagnosticChannelIds);
 
   return (
     <main className="workspace">
@@ -154,6 +160,28 @@ export default async function GuildDashboardPage({
           <h2>Recent Logs</h2>
           <p>{recentLogs.length} stored events</p>
         </article>
+      </section>
+
+      <section className="diagnostics" aria-label="Bot diagnostics">
+        <div>
+          <p className="eyebrow">Bot Diagnostics</p>
+          <h2>{diagnostics.state === "ready" ? "Ready to log" : "Needs attention"}</h2>
+        </div>
+        <div className="diagnosticChecks">
+          <DiagnosticCheck label="Bot is in this server" passed={diagnostics.botPresent} />
+          <DiagnosticCheck
+            label="View Audit Log permission"
+            passed={diagnostics.auditLog}
+            unavailable={diagnostics.auditLog === null}
+          />
+          {diagnostics.channels.map((channel) => (
+            <DiagnosticCheck
+              key={channel.id}
+              label={`Log channel ${channel.id}`}
+              passed={channel.canView && channel.canSend && channel.canEmbed}
+            />
+          ))}
+        </div>
       </section>
 
       <form className="configForm" action={saveSettings}>
@@ -299,4 +327,22 @@ function cleanIgnoredEntityId(
 function cleanReason(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
   return text.length > 0 ? text.slice(0, 200) : null;
+}
+
+function DiagnosticCheck({
+  label,
+  passed,
+  unavailable = false
+}: {
+  label: string;
+  passed: boolean | null;
+  unavailable?: boolean;
+}) {
+  const status = unavailable ? "Not checked" : passed ? "Ready" : "Action needed";
+  return (
+    <div className="diagnosticCheck">
+      <span>{label}</span>
+      <strong className={passed ? "ok" : "warn"}>{status}</strong>
+    </div>
+  );
 }
