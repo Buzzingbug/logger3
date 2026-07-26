@@ -31,7 +31,7 @@ export async function getGuildDiagnostics(
   guildId: string,
   channelIds: Array<string | null | undefined>
 ): Promise<GuildDiagnostics> {
-  const token = process.env.DISCORD_BOT_TOKEN;
+  const token = process.env.DISCORD_TOKEN;
   if (!token) return { state: "unavailable", botPresent: false, auditLog: null, channels: [] };
 
   try {
