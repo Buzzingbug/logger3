@@ -1,9 +1,9 @@
 import { Worker } from "bullmq";
 import { EmbedBuilder, REST, Routes } from "discord.js";
-import { eq } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { Redis } from "ioredis";
 import pino from "pino";
-import { createDb, guildSettings, logEvents } from "@logger/db";
+import { createDb, guildSettings, logEvents, messageSnapshots } from "@logger/db";
 import {
   LOG_EVENT_COLORS,
   LOG_EVENT_LABELS,
@@ -53,6 +53,9 @@ function renderEmbed(event: typeof logEvents.$inferSelect) {
     embed.addFields({ name: "Target", value: `<@${event.targetId}>`, inline: true });
   if (event.channelId)
     embed.addFields({ name: "Channel", value: `<#${event.channelId}>`, inline: true });
+  if (event.confidence === "high") {
+    embed.addFields({ name: "Attribution", value: "Confirmed from audit log", inline: true });
+  }
 
   for (const [key, value] of Object.entries(payload).slice(0, 10)) {
     if (value === null || value === undefined || value === "") continue;
@@ -75,6 +78,29 @@ async function resolveDestination(guildId: string, type: typeof logEvents.$infer
   return settings?.defaultLogChannelId ?? null;
 }
 
+async function purgeExpiredData() {
+  const settings = await db.query.guildSettings.findMany();
+
+  for (const setting of settings) {
+    const cutoff = new Date(Date.now() - setting.retentionDays * 24 * 60 * 60 * 1000);
+    await Promise.all([
+      db
+        .delete(logEvents)
+        .where(and(eq(logEvents.guildId, setting.guildId), lt(logEvents.createdAt, cutoff))),
+      db
+        .delete(messageSnapshots)
+        .where(
+          and(
+            eq(messageSnapshots.guildId, setting.guildId),
+            lt(messageSnapshots.expiresAt, new Date())
+          )
+        )
+    ]);
+  }
+
+  logger.info({ guilds: settings.length }, "retention cleanup complete");
+}
+
 function titleCase(value: string) {
   return value.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
 }
@@ -84,3 +110,9 @@ function truncate(value: string) {
 }
 
 logger.info("worker started");
+void purgeExpiredData().catch((error) => logger.error({ error }, "retention cleanup failed"));
+setInterval(
+  () =>
+    void purgeExpiredData().catch((error) => logger.error({ error }, "retention cleanup failed")),
+  6 * 60 * 60 * 1000
+).unref();

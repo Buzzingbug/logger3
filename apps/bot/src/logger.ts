@@ -12,6 +12,8 @@ export type CaptureLogInput = {
   targetId?: string | null;
   channelId?: string | null;
   messageId?: string | null;
+  auditLogEntryId?: string | null;
+  confidence?: "high" | "unknown";
   roleIds?: string[];
   isBot?: boolean;
   payload?: LogPayload;
@@ -29,6 +31,8 @@ export async function captureLog(db: Db, queue: Queue<LogDeliveryJob>, input: Ca
       targetId: input.targetId ?? null,
       channelId: input.channelId ?? null,
       messageId: input.messageId ?? null,
+      auditLogEntryId: input.auditLogEntryId ?? null,
+      confidence: input.confidence ?? "unknown",
       payload: input.payload ?? {}
     })
     .returning({ id: logEvents.id });

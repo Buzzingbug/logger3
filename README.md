@@ -31,4 +31,6 @@ Use Railway variables for all real values. `.env.example` is only a local refere
 
 ## Current Status
 
-Phase 1 is complete. Phase 2 has core log capture, persistence, queue delivery, and a worker service scaffold.
+Phase 1 is complete. The logging MVP captures message, member, moderation, channel, role, and voice activity with audit-log attribution where Discord provides it.
+
+See [Railway deployment](docs/railway.md) for the production setup.

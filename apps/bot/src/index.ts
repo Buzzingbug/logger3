@@ -70,14 +70,20 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
 
 client.on(Events.MessageDelete, async (message) => {
   if (!message.guildId || message.author?.bot) return;
+  const audit = await findRecentAuditEntry(
+    message.guildId,
+    AuditLogEvent.MessageDelete,
+    (entry) => entry.targetId === message.author?.id
+  );
 
   await captureLog(db, logDeliveryQueue, {
     type: "message.delete",
     guildId: message.guildId,
-    actorId: message.author?.id ?? null,
+    actorId: audit?.executorId ?? message.author?.id ?? null,
     targetId: message.author?.id ?? null,
     channelId: message.channelId,
     messageId: message.id,
+    ...auditDetails(audit),
     roleIds: message.member?.roles.cache.map((role) => role.id) ?? [],
     payload: {
       author: message.author ? userTag(message.author) : "Unknown",
@@ -111,11 +117,17 @@ client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
 client.on(Events.MessageBulkDelete, async (messages, channel) => {
   const guildId = channel.guild?.id;
   if (!guildId) return;
+  const audit = await findRecentAuditEntry(
+    guildId,
+    AuditLogEvent.MessageBulkDelete,
+    (entry) => entry.extra.channel?.id === channel.id
+  );
 
   await captureLog(db, logDeliveryQueue, {
     type: "message.bulk_delete",
     guildId,
     channelId: channel.id,
+    ...auditDetails(audit),
     payload: { count: messages.size, channel: channelName(channel) }
   });
 });
@@ -132,10 +144,17 @@ client.on(Events.GuildMemberAdd, async (member) => {
 });
 
 client.on(Events.GuildMemberRemove, async (member) => {
+  const kickAudit = await findRecentAuditEntry(
+    member.guild.id,
+    AuditLogEvent.MemberKick,
+    (entry) => entry.targetId === member.id
+  );
   await captureLog(db, logDeliveryQueue, {
-    type: "member.leave",
+    type: kickAudit ? "moderation.kick" : "member.leave",
     guildId: member.guild.id,
+    actorId: kickAudit?.executorId ?? null,
     targetId: member.id,
+    ...auditDetails(kickAudit),
     roleIds: member.roles.cache.map((role) => role.id),
     isBot: member.user?.bot ?? false,
     payload: { user: member.user ? userTag(member.user) : member.id }
@@ -143,24 +162,34 @@ client.on(Events.GuildMemberRemove, async (member) => {
 });
 
 client.on(Events.GuildBanAdd, async (ban) => {
-  const audit = await findRecentAuditUser(ban.guild.id, AuditLogEvent.MemberBanAdd, ban.user.id);
+  const audit = await findRecentAuditEntry(
+    ban.guild.id,
+    AuditLogEvent.MemberBanAdd,
+    (entry) => entry.targetId === ban.user.id
+  );
   await captureLog(db, logDeliveryQueue, {
     type: "moderation.ban",
     guildId: ban.guild.id,
     actorId: audit?.executorId ?? null,
     targetId: ban.user.id,
+    ...auditDetails(audit),
     isBot: ban.user.bot,
     payload: { user: userTag(ban.user), reason: ban.reason ?? audit?.reason ?? null }
   });
 });
 
 client.on(Events.GuildBanRemove, async (ban) => {
-  const audit = await findRecentAuditUser(ban.guild.id, AuditLogEvent.MemberBanRemove, ban.user.id);
+  const audit = await findRecentAuditEntry(
+    ban.guild.id,
+    AuditLogEvent.MemberBanRemove,
+    (entry) => entry.targetId === ban.user.id
+  );
   await captureLog(db, logDeliveryQueue, {
     type: "moderation.unban",
     guildId: ban.guild.id,
     actorId: audit?.executorId ?? null,
     targetId: ban.user.id,
+    ...auditDetails(audit),
     isBot: ban.user.bot,
     payload: { user: userTag(ban.user), reason: audit?.reason ?? null }
   });
@@ -169,6 +198,61 @@ client.on(Events.GuildBanRemove, async (ban) => {
 client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
   await captureRoleDiff(oldMember, newMember);
   await captureTimeoutDiff(oldMember, newMember);
+});
+
+client.on(Events.ChannelCreate, async (channel) => {
+  if (!("guild" in channel)) return;
+  await captureChannelLog("channel.create", channel, AuditLogEvent.ChannelCreate);
+});
+
+client.on(Events.ChannelUpdate, async (oldChannel, newChannel) => {
+  if (!("guild" in newChannel)) return;
+  await captureChannelLog("channel.update", newChannel, AuditLogEvent.ChannelUpdate, {
+    before: channelName(oldChannel),
+    after: channelName(newChannel)
+  });
+});
+
+client.on(Events.ChannelDelete, async (channel) => {
+  if (!("guild" in channel)) return;
+  await captureChannelLog("channel.delete", channel, AuditLogEvent.ChannelDelete);
+});
+
+client.on(Events.GuildRoleCreate, async (role) => {
+  await captureRoleLog("role.create", role, AuditLogEvent.RoleCreate);
+});
+
+client.on(Events.GuildRoleUpdate, async (oldRole, newRole) => {
+  await captureRoleLog("role.update", newRole, AuditLogEvent.RoleUpdate, {
+    before: oldRole.name,
+    after: newRole.name
+  });
+});
+
+client.on(Events.GuildRoleDelete, async (role) => {
+  await captureRoleLog("role.delete", role, AuditLogEvent.RoleDelete);
+});
+
+client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+  if (oldState.channelId === newState.channelId) return;
+  const type = oldState.channelId
+    ? newState.channelId
+      ? "voice.move"
+      : "voice.leave"
+    : "voice.join";
+  await captureLog(db, logDeliveryQueue, {
+    type,
+    guildId: newState.guild.id,
+    targetId: newState.id,
+    channelId: newState.channelId ?? oldState.channelId,
+    roleIds: newState.member?.roles.cache.map((role) => role.id) ?? [],
+    isBot: newState.member?.user.bot ?? false,
+    payload: {
+      user: newState.member ? userTag(newState.member.user) : newState.id,
+      from: oldState.channel ? channelName(oldState.channel) : null,
+      to: newState.channel ? channelName(newState.channel) : null
+    }
+  });
 });
 
 createServer((_req, res) => {
@@ -196,6 +280,11 @@ async function captureRoleDiff(
 ) {
   const before = oldMember.roles.cache;
   const after = newMember.roles.cache;
+  const audit = await findRecentAuditEntry(
+    newMember.guild.id,
+    AuditLogEvent.MemberRoleUpdate,
+    (entry) => entry.targetId === newMember.id
+  );
 
   for (const role of after.values()) {
     if (!before.has(role.id)) {
@@ -204,6 +293,7 @@ async function captureRoleDiff(
         guildId: newMember.guild.id,
         targetId: newMember.id,
         roleIds: [role.id],
+        ...auditDetails(audit),
         isBot: newMember.user.bot,
         payload: { user: userTag(newMember.user), roleId: role.id, roleName: role.name }
       });
@@ -217,6 +307,7 @@ async function captureRoleDiff(
         guildId: newMember.guild.id,
         targetId: newMember.id,
         roleIds: [role.id],
+        ...auditDetails(audit),
         isBot: newMember.user.bot,
         payload: { user: userTag(newMember.user), roleId: role.id, roleName: role.name }
       });
@@ -231,12 +322,18 @@ async function captureTimeoutDiff(
   const oldUntil = oldMember.communicationDisabledUntilTimestamp ?? null;
   const newUntil = newMember.communicationDisabledUntilTimestamp ?? null;
   if (oldUntil === newUntil) return;
+  const audit = await findRecentAuditEntry(
+    newMember.guild.id,
+    AuditLogEvent.MemberUpdate,
+    (entry) => entry.targetId === newMember.id
+  );
 
   await captureLog(db, logDeliveryQueue, {
     type: "moderation.timeout",
     guildId: newMember.guild.id,
     targetId: newMember.id,
     roleIds: newMember.roles.cache.map((role) => role.id),
+    ...auditDetails(audit),
     isBot: newMember.user.bot,
     payload: {
       user: userTag(newMember.user),
@@ -245,11 +342,86 @@ async function captureTimeoutDiff(
   });
 }
 
-async function findRecentAuditUser(guildId: string, type: AuditLogEvent, targetId: string) {
+async function captureChannelLog(
+  type: "channel.create" | "channel.update" | "channel.delete",
+  channel: GuildLikeChannel,
+  auditType: AuditLogEvent,
+  payload: Record<string, unknown> = {}
+) {
+  const audit = await findRecentAuditEntry(
+    channel.guild.id,
+    auditType,
+    (entry) => entry.targetId === channel.id
+  );
+  await captureLog(db, logDeliveryQueue, {
+    type,
+    guildId: channel.guild.id,
+    actorId: audit?.executorId ?? null,
+    targetId: channel.id,
+    channelId: channel.id,
+    ...auditDetails(audit),
+    payload: { channel: channelName(channel), ...payload }
+  });
+}
+
+async function captureRoleLog(
+  type: "role.create" | "role.update" | "role.delete",
+  role: { id: string; name: string; guild: { id: string } },
+  auditType: AuditLogEvent,
+  payload: Record<string, unknown> = {}
+) {
+  const audit = await findRecentAuditEntry(
+    role.guild.id,
+    auditType,
+    (entry) => entry.targetId === role.id
+  );
+  await captureLog(db, logDeliveryQueue, {
+    type,
+    guildId: role.guild.id,
+    actorId: audit?.executorId ?? null,
+    targetId: role.id,
+    roleIds: [role.id],
+    ...auditDetails(audit),
+    payload: { role: role.name, ...payload }
+  });
+}
+
+function auditDetails(audit: RecentAuditEntry | undefined) {
+  return audit
+    ? { auditLogEntryId: audit.id, confidence: "high" as const }
+    : { auditLogEntryId: null, confidence: "unknown" as const };
+}
+
+async function findRecentAuditEntry(
+  guildId: string,
+  type: AuditLogEvent,
+  matches: (entry: RecentAuditEntry) => boolean
+) {
   const guild = await client.guilds.fetch(guildId);
   const logs = await guild.fetchAuditLogs({ type, limit: 5 }).catch(() => null);
-  return logs?.entries.find((entry) => entry.targetId === targetId) ?? null;
+  const maximumAge = 15_000;
+  return (
+    logs?.entries
+      .map((entry) => entry as unknown as RecentAuditEntry)
+      .find((entry) => Date.now() - entry.createdTimestamp < maximumAge && matches(entry)) ??
+    undefined
+  );
 }
+
+type GuildLikeChannel = {
+  id: string;
+  name?: string | null;
+  guild: { id: string };
+};
+
+type RecentAuditEntry = {
+  id: string;
+  executorId: string | null;
+  targetId: string | null;
+  reason: string | null;
+  createdTimestamp: number;
+  extra: { channel?: { id: string } };
+};
 
 function dashboardUrl() {
   return process.env.PUBLIC_APP_URL
