@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.13.1",
   "engines": {
-    "node": "22.x"
+    "node": "23.x"
   },
   "scripts": {
     "build": "pnpm -r build",
