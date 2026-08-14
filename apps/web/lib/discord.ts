@@ -88,7 +88,7 @@ async function discordFetch<T>(path: string, accessToken: string) {
 }
 
 function required(name: string) {
-  const value = process.env[name];
+  let value = process.env[name];
   if (!value) throw new Error(`Missing ${name}`);
-  return value;
+  return value.trim().replace(/^["']|["']$/g, "");
 }
