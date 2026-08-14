@@ -1,5 +1,3 @@
-"use server";
-
 import { cookies } from "next/headers";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
@@ -14,11 +12,11 @@ export type DashboardSession = {
 export const SESSION_COOKIE = "logger_session";
 export const STATE_COOKIE = "logger_oauth_state";
 
-export async function signSession(session: DashboardSession) {
+export function signSession(session: DashboardSession) {
   return sign(JSON.stringify(session));
 }
 
-export async function verifySession(raw: string): Promise<DashboardSession | null> {
+export function verifySession(raw: string): DashboardSession | null {
   const payload = verify(raw);
   if (!payload) return null;
   try {
@@ -30,7 +28,7 @@ export async function verifySession(raw: string): Promise<DashboardSession | nul
   }
 }
 
-export async function getCookieOptions(maxAge: number) {
+export function getCookieOptions(maxAge: number) {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
@@ -43,7 +41,7 @@ export async function getCookieOptions(maxAge: number) {
 export async function createOAuthState() {
   const state = randomBytes(24).toString("base64url");
   const store = await cookies();
-  store.set(STATE_COOKIE, state, await getCookieOptions(10 * 60));
+  store.set(STATE_COOKIE, state, getCookieOptions(10 * 60));
   return state;
 }
 
@@ -56,7 +54,7 @@ export async function consumeOAuthState(state: string | null) {
 
 export async function setSession(session: DashboardSession) {
   const store = await cookies();
-  store.set(SESSION_COOKIE, await signSession(session), await getCookieOptions(7 * 24 * 60 * 60));
+  store.set(SESSION_COOKIE, signSession(session), getCookieOptions(7 * 24 * 60 * 60));
 }
 
 export async function getSession() {
