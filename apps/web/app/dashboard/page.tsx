@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { fetchManageableGuilds, guildIconUrl, type DiscordGuild } from "../../lib/discord";
-import { getSession, clearSession } from "../../lib/session";
+import { getSession } from "../../lib/session";
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -12,8 +12,7 @@ export default async function DashboardPage() {
     guilds = await fetchManageableGuilds(session.accessToken);
   } catch (error) {
     console.error("Failed to fetch guilds with session accessToken:", error);
-    await clearSession();
-    redirect("/login");
+    redirect("/api/auth/logout");
   }
 
   return (
