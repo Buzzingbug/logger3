@@ -11,7 +11,7 @@ import {
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import pino from "pino";
-import { createDb, guilds, type Database } from "@logger/db";
+import { createDb, guilds, initDatabase, type Database } from "@logger/db";
 import type { LogDeliveryJob } from "@logger/shared";
 import { botConfig } from "./config.js";
 import { captureLog, channelName, userTag } from "./logger.js";
@@ -260,6 +260,7 @@ createServer((_req, res) => {
   res.end(JSON.stringify({ ok: true, service: "bot", ready: client.isReady() }));
 }).listen(botConfig.port, () => logger.info({ port: botConfig.port }, "health server listening"));
 
+await initDatabase();
 await client.login(botConfig.token());
 
 async function upsertGuild(
