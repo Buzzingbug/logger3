@@ -1,13 +1,20 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { fetchManageableGuilds, guildIconUrl } from "../../lib/discord";
-import { getSession } from "../../lib/session";
+import { fetchManageableGuilds, guildIconUrl, type DiscordGuild } from "../../lib/discord";
+import { getSession, clearSession } from "../../lib/session";
 
 export default async function DashboardPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const guilds = await fetchManageableGuilds(session.accessToken);
+  let guilds: DiscordGuild[] = [];
+  try {
+    guilds = await fetchManageableGuilds(session.accessToken);
+  } catch (error) {
+    console.error("Failed to fetch guilds with session accessToken:", error);
+    await clearSession();
+    redirect("/login");
+  }
 
   return (
     <main className="workspace">
@@ -25,18 +32,27 @@ export default async function DashboardPage() {
       </header>
 
       <section className="guildGrid">
-        {guilds.map((guild) => {
-          const iconUrl = guildIconUrl(guild);
-          return (
-            <Link className="guildCard" href={`/dashboard/${guild.id}`} key={guild.id}>
-              {iconUrl ? <img src={iconUrl} alt="" /> : <span>{guild.name.slice(0, 2)}</span>}
-              <div>
-                <h2>{guild.name}</h2>
-                <p>{guild.owner ? "Owner" : "Manage Server"}</p>
-              </div>
-            </Link>
-          );
-        })}
+        {guilds.length === 0 ? (
+          <div className="card text-center" style={{ gridColumn: "1 / -1", padding: "3rem" }}>
+            <h2>No Manageable Servers Found</h2>
+            <p style={{ marginTop: "0.5rem", color: "#9ca3af" }}>
+              Make sure you have &quot;Manage Server&quot; or &quot;Administrator&quot; permissions in your Discord servers.
+            </p>
+          </div>
+        ) : (
+          guilds.map((guild) => {
+            const iconUrl = guildIconUrl(guild);
+            return (
+              <Link className="guildCard" href={`/dashboard/${guild.id}`} key={guild.id}>
+                {iconUrl ? <img src={iconUrl} alt="" /> : <span>{guild.name.slice(0, 2)}</span>}
+                <div>
+                  <h2>{guild.name}</h2>
+                  <p>{guild.owner ? "Owner" : "Manage Server"}</p>
+                </div>
+              </Link>
+            );
+          })
+        )}
       </section>
     </main>
   );

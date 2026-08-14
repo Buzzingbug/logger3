@@ -67,9 +67,14 @@ export function guildIconUrl(guild: DiscordGuild) {
   return `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=96`;
 }
 
-function hasManagePermission(permissions: string) {
-  const bits = BigInt(permissions);
-  return (bits & ADMINISTRATOR) === ADMINISTRATOR || (bits & MANAGE_GUILD) === MANAGE_GUILD;
+function hasManagePermission(permissions: string | number | undefined | null) {
+  if (!permissions) return false;
+  try {
+    const bits = BigInt(permissions);
+    return (bits & ADMINISTRATOR) === ADMINISTRATOR || (bits & MANAGE_GUILD) === MANAGE_GUILD;
+  } catch {
+    return false;
+  }
 }
 
 async function discordFetch<T>(path: string, accessToken: string) {
