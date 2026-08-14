@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import {
   IGNORED_ENTITY_TYPES,
   LOG_EVENT_LABELS,
@@ -13,10 +13,14 @@ import {
   guildLogRoutes,
   guildSettings,
   ignoredEntities,
-  logEvents
+  logEvents,
+  type GuildLogRoute,
+  type GuildSetting,
+  type IgnoredEntity,
+  type LogEvent
 } from "../../../lib/db";
 import { getSession } from "../../../lib/session";
-import { getGuildDiagnostics } from "../../../lib/bot-discord";
+import { getGuildDiagnostics, type GuildDiagnostics } from "../../../lib/bot-discord";
 
 export const dynamic = "force-dynamic";
 
@@ -29,60 +33,84 @@ export default async function GuildDashboardPage({
   if (!session) redirect("/login");
 
   const { guildId } = await params;
-  const db = process.env.DATABASE_URL ? createWebDb() : null;
-  const settings = db
-    ? await db.query.guildSettings.findFirst({ where: eq(guildSettings.guildId, guildId) })
-    : null;
-  const routes = db
-    ? await db.query.guildLogRoutes.findMany({ where: eq(guildLogRoutes.guildId, guildId) })
-    : [];
-  const ignored = db
-    ? await db.query.ignoredEntities.findMany({
-        where: eq(ignoredEntities.guildId, guildId),
-        orderBy: (table, { asc }) => [asc(table.entityType), asc(table.entityId)]
-      })
-    : [];
-  const recentLogs = db
-    ? await db.query.logEvents.findMany({
-        where: eq(logEvents.guildId, guildId),
-        orderBy: (table, { desc }) => [desc(table.createdAt)],
-        limit: 20
-      })
-    : [];
+
+  let settings: GuildSetting | null = null;
+  let routes: GuildLogRoute[] = [];
+  let ignored: IgnoredEntity[] = [];
+  let recentLogs: LogEvent[] = [];
+
+  try {
+    const db = process.env.DATABASE_URL ? createWebDb() : null;
+    if (db) {
+      const s = await db
+        .select()
+        .from(guildSettings)
+        .where(eq(guildSettings.guildId, guildId))
+        .limit(1);
+      settings = s[0] ?? null;
+      routes = await db
+        .select()
+        .from(guildLogRoutes)
+        .where(eq(guildLogRoutes.guildId, guildId));
+      ignored = await db
+        .select()
+        .from(ignoredEntities)
+        .where(eq(ignoredEntities.guildId, guildId));
+      recentLogs = await db
+        .select()
+        .from(logEvents)
+        .where(eq(logEvents.guildId, guildId))
+        .orderBy(desc(logEvents.createdAt))
+        .limit(20);
+    }
+  } catch (err) {
+    console.error("Guild data load notice:", err);
+  }
 
   async function saveSettings(formData: FormData) {
     "use server";
-    await requireSession();
-    const writeDb = createWebDb();
-    const defaultLogChannelId = cleanSnowflake(formData.get("defaultLogChannelId"));
-    const retentionDays = clamp(Number(formData.get("retentionDays") ?? 30), 1, 365);
+    const userSession = await getSession();
+    if (!userSession) redirect("/login");
 
-    await writeDb
-      .insert(guildSettings)
-      .values({ guildId, defaultLogChannelId, retentionDays })
-      .onConflictDoUpdate({
-        target: guildSettings.guildId,
-        set: { defaultLogChannelId, retentionDays, updatedAt: new Date() }
-      });
+    try {
+      const writeDb = createWebDb();
+      const defaultLogChannelId = cleanSnowflake(formData.get("defaultLogChannelId"));
+      const retentionDays = clamp(Number(formData.get("retentionDays") ?? 30), 1, 365);
+
+      await writeDb
+        .insert(guildSettings)
+        .values({ guildId, defaultLogChannelId, retentionDays })
+        .onConflictDoUpdate({
+          target: guildSettings.guildId,
+          set: { defaultLogChannelId, retentionDays, updatedAt: new Date() }
+        });
+    } catch (e) {
+      console.error("Save settings error:", e);
+    }
 
     revalidatePath(`/dashboard/${guildId}`);
   }
 
   async function saveRoutes(formData: FormData) {
     "use server";
-    await requireSession();
-    const writeDb = createWebDb();
+    const userSession = await getSession();
+    if (!userSession) redirect("/login");
 
-    for (const type of LOG_EVENT_TYPES) {
-      const enabled = formData.get(`${type}:enabled`) === "on";
-      const channelId = cleanSnowflake(formData.get(`${type}:channelId`));
-      await writeDb
-        .insert(guildLogRoutes)
-        .values({ guildId, type, enabled, channelId })
-        .onConflictDoUpdate({
-          target: [guildLogRoutes.guildId, guildLogRoutes.type],
-          set: { enabled, channelId, updatedAt: new Date() }
-        });
+    try {
+      const writeDb = createWebDb();
+      for (const type of LOG_EVENT_TYPES) {
+        const enabled = formData.get(`${type}:enabled`) === "on";
+        const channelId = cleanSnowflake(formData.get(`${type}:channelId`));
+        await writeDb
+          .insert(guildLogRoutes)
+          .values({ guildId, type, enabled, channelId })
+          .onConflictDoUpdate({
+            target: [guildLogRoutes.guildId, guildLogRoutes.type],
+            set: { enabled, channelId, updatedAt: new Date() }
+          });
+      }
+    } catch (e) {
+      console.error("Save routes error:", e);
     }
 
     revalidatePath(`/dashboard/${guildId}`);
@@ -90,37 +118,49 @@ export default async function GuildDashboardPage({
 
   async function addIgnoreRule(formData: FormData) {
     "use server";
-    await requireSession();
-    const writeDb = createWebDb();
-    const entityType = cleanIgnoreType(formData.get("entityType"));
-    const entityId = cleanIgnoredEntityId(entityType, formData.get("entityId"));
-    const reason = cleanReason(formData.get("reason"));
+    const userSession = await getSession();
+    if (!userSession) redirect("/login");
 
-    if (!entityType || !entityId) return;
+    try {
+      const writeDb = createWebDb();
+      const entityType = cleanIgnoreType(formData.get("entityType"));
+      const entityId = cleanIgnoredEntityId(entityType, formData.get("entityId"));
+      const reason = cleanReason(formData.get("reason"));
 
-    await writeDb
-      .insert(ignoredEntities)
-      .values({ guildId, entityType, entityId, reason })
-      .onConflictDoUpdate({
-        target: [ignoredEntities.guildId, ignoredEntities.entityType, ignoredEntities.entityId],
-        set: { reason }
-      });
+      if (!entityType || !entityId) return;
+
+      await writeDb
+        .insert(ignoredEntities)
+        .values({ guildId, entityType, entityId, reason })
+        .onConflictDoUpdate({
+          target: [ignoredEntities.guildId, ignoredEntities.entityType, ignoredEntities.entityId],
+          set: { reason }
+        });
+    } catch (e) {
+      console.error("Add ignore rule error:", e);
+    }
 
     revalidatePath(`/dashboard/${guildId}`);
   }
 
   async function removeIgnoreRule(formData: FormData) {
     "use server";
-    await requireSession();
-    const writeDb = createWebDb();
-    const entityType = cleanIgnoreType(formData.get("entityType"));
-    const entityId = cleanIgnoredEntityId(entityType, formData.get("entityId"));
+    const userSession = await getSession();
+    if (!userSession) redirect("/login");
 
-    if (!entityType || !entityId) return;
+    try {
+      const writeDb = createWebDb();
+      const entityType = cleanIgnoreType(formData.get("entityType"));
+      const entityId = cleanIgnoredEntityId(entityType, formData.get("entityId"));
 
-    await writeDb
-      .delete(ignoredEntities)
-      .where(eq(ignoredEntities.id, String(formData.get("ignoreId") ?? "")));
+      if (!entityType || !entityId) return;
+
+      await writeDb
+        .delete(ignoredEntities)
+        .where(eq(ignoredEntities.id, String(formData.get("ignoreId") ?? "")));
+    } catch (e) {
+      console.error("Remove ignore rule error:", e);
+    }
 
     revalidatePath(`/dashboard/${guildId}`);
   }
@@ -130,7 +170,14 @@ export default async function GuildDashboardPage({
     settings?.defaultLogChannelId,
     ...routes.filter((route) => route.enabled).map((route) => route.channelId)
   ];
-  const diagnostics = await getGuildDiagnostics(guildId, diagnosticChannelIds);
+
+  let diagnostics: GuildDiagnostics = { state: "attention", botPresent: false, auditLog: null, channels: [] };
+  try {
+    diagnostics = await getGuildDiagnostics(guildId, diagnosticChannelIds);
+  } catch (e) {
+    console.error("Diagnostics check error:", e);
+  }
+
   const botInviteUrl = process.env.DISCORD_CLIENT_ID
     ? `https://discord.com/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&permissions=8&scope=bot%20applications.commands&guild_id=${guildId}&disable_guild_select=true`
     : null;
@@ -322,11 +369,6 @@ export default async function GuildDashboardPage({
       </section>
     </main>
   );
-}
-
-async function requireSession() {
-  const session = await getSession();
-  if (!session) redirect("/login");
 }
 
 function cleanSnowflake(value: FormDataEntryValue | null) {
