@@ -11,7 +11,7 @@ import {
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import pino from "pino";
-import { createDb, guilds } from "@logger/db";
+import { createDb, guilds, type Database } from "@logger/db";
 import type { LogDeliveryJob } from "@logger/shared";
 import { botConfig } from "./config.js";
 import { captureLog, channelName, userTag } from "./logger.js";
@@ -19,7 +19,7 @@ import { captureLog, channelName, userTag } from "./logger.js";
 const logger = pino({ name: "logger-bot" });
 const redis = new Redis(botConfig.redisUrl(), { maxRetriesPerRequest: null });
 export const logDeliveryQueue = new Queue<LogDeliveryJob>("log-delivery", { connection: redis });
-export const db = createDb();
+export const db: Database = createDb();
 
 const client = new Client({ intents: botConfig.intents, partials: botConfig.partials });
 

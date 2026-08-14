@@ -4,6 +4,8 @@
     "jsx": "preserve",
     "allowJs": true,
     "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
     "incremental": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
