@@ -129,18 +129,34 @@ export default async function GuildDashboardPage({
     ...routes.filter((route) => route.enabled).map((route) => route.channelId)
   ];
   const diagnostics = await getGuildDiagnostics(guildId, diagnosticChannelIds);
+  const botInviteUrl = process.env.DISCORD_CLIENT_ID
+    ? `https://discord.com/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&permissions=8&scope=bot%20applications.commands&guild_id=${guildId}&disable_guild_select=true`
+    : null;
 
   return (
     <main className="workspace">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Server</p>
-          <h1>Logger setup</h1>
+          <p className="eyebrow">Server Configuration</p>
+          <h1>Server Logger Dashboard</h1>
           <p className="copy">Guild ID: {guildId}</p>
         </div>
-        <Link className="button secondary" href="/dashboard">
-          Back
-        </Link>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          {botInviteUrl && (
+            <a
+              href={botInviteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="button"
+              style={{ background: "#5865F2", color: "#fff" }}
+            >
+              {diagnostics.botPresent ? "Re-authorize Bot" : "➕ Invite Bot to Server"}
+            </a>
+          )}
+          <Link className="button secondary" href="/dashboard">
+            Back to Servers
+          </Link>
+        </div>
       </header>
 
       <section className="grid">
@@ -153,19 +169,19 @@ export default async function GuildDashboardPage({
           </p>
         </article>
         <article>
-          <h2>Retention</h2>
+          <h2>Retention Period</h2>
           <p>{settings?.retentionDays ?? 30} days</p>
         </article>
         <article>
-          <h2>Recent Logs</h2>
-          <p>{recentLogs.length} stored events</p>
+          <h2>Stored Audit Logs</h2>
+          <p>{recentLogs.length} recent events</p>
         </article>
       </section>
 
       <section className="diagnostics" aria-label="Bot diagnostics">
         <div>
           <p className="eyebrow">Bot Diagnostics</p>
-          <h2>{diagnostics.state === "ready" ? "Ready to log" : "Needs attention"}</h2>
+          <h2>{diagnostics.state === "ready" ? "🟢 Ready to log events" : "🟡 Needs setup attention"}</h2>
         </div>
         <div className="diagnosticChecks">
           <DiagnosticCheck label="Bot is in this server" passed={diagnostics.botPresent} />
@@ -184,17 +200,18 @@ export default async function GuildDashboardPage({
         </div>
       </section>
 
+      <h2 style={{ marginTop: "2rem" }}>⚙️ General Settings</h2>
       <form className="configForm" action={saveSettings}>
         <label>
-          Default log channel ID
+          Default Log Channel ID (Discord Snowflake)
           <input
             name="defaultLogChannelId"
             defaultValue={settings?.defaultLogChannelId ?? ""}
-            placeholder="123456789012345678"
+            placeholder="e.g. 123456789012345678"
           />
         </label>
         <label>
-          Retention days
+          Log Retention (Days)
           <input
             name="retentionDays"
             type="number"
@@ -208,6 +225,7 @@ export default async function GuildDashboardPage({
         </button>
       </form>
 
+      <h2 style={{ marginTop: "2rem" }}>📋 Event Logging Routes</h2>
       <form className="eventList" action={saveRoutes}>
         {LOG_EVENT_TYPES.map((type) => {
           const route = routeMap.get(type);
@@ -224,35 +242,36 @@ export default async function GuildDashboardPage({
               <input
                 name={`${type}:channelId`}
                 defaultValue={route?.channelId ?? ""}
-                placeholder="Optional channel ID"
+                placeholder="Optional specific channel ID (overrides default)"
               />
             </div>
           );
         })}
-        <button className="button" type="submit">
-          Save Routes
+        <button className="button" type="submit" style={{ margin: "1rem 0" }}>
+          Save Event Routes
         </button>
       </form>
 
+      <h2 style={{ marginTop: "2rem" }}>🚫 Ignored Entities (Ignore Users/Bots/Channels/Roles)</h2>
       <section className="ignorePanel">
         <form className="configForm" action={addIgnoreRule}>
           <label>
-            Ignore type
+            Ignore Entity Type
             <select name="entityType" defaultValue="user">
               {IGNORED_ENTITY_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {type}
+                  {type.toUpperCase()}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            Entity ID
-            <input name="entityId" placeholder="User, role, or channel ID. Use * for bots." />
+            Entity Discord ID
+            <input name="entityId" placeholder="User, role, or channel ID. Use * for all bots." />
           </label>
           <label>
             Reason
-            <input name="reason" placeholder="Optional note" />
+            <input name="reason" placeholder="e.g. Music bot spam" />
           </label>
           <button className="button" type="submit">
             Add Ignore Rule
@@ -262,8 +281,8 @@ export default async function GuildDashboardPage({
         <div className="eventList">
           {ignored.length === 0 ? (
             <div className="eventRow">
-              <span>No ignore rules yet</span>
-              <strong>Active capture</strong>
+              <span>No ignored entities configured</span>
+              <strong>Active capture on all entities</strong>
             </div>
           ) : (
             ignored.map((entry) => (
@@ -283,13 +302,21 @@ export default async function GuildDashboardPage({
         </div>
       </section>
 
+      <h2 style={{ marginTop: "2rem" }}>📜 Recent Stored Logs Stream</h2>
       <section className="eventList">
-        {recentLogs.map((event) => (
-          <div className="eventRow" key={event.id}>
-            <span>{LOG_EVENT_LABELS[event.type]}</span>
-            <strong>{event.createdAt.toLocaleString()}</strong>
+        {recentLogs.length === 0 ? (
+          <div className="eventRow">
+            <span>No log events recorded yet</span>
+            <strong>Listening for Discord events...</strong>
           </div>
-        ))}
+        ) : (
+          recentLogs.map((event) => (
+            <div className="eventRow" key={event.id}>
+              <span>{LOG_EVENT_LABELS[event.type]}</span>
+              <strong>{event.createdAt.toLocaleString()}</strong>
+            </div>
+          ))
+        )}
       </section>
     </main>
   );

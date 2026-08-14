@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeCode, fetchDiscordUser } from "../../../../../lib/discord";
-import { consumeOAuthState, setSession } from "../../../../../lib/session";
+import {
+  consumeOAuthState,
+  signSession,
+  getCookieOptions,
+  SESSION_COOKIE,
+  type DashboardSession
+} from "../../../../../lib/session";
 
 function getAppBaseUrl(request: NextRequest): string {
   const envUrl = process.env.PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL;
@@ -29,16 +35,26 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/?auth=failed", baseUrl));
   }
 
-  const token = await exchangeCode(code);
-  const user = await fetchDiscordUser(token.access_token);
+  try {
+    const token = await exchangeCode(code);
+    const user = await fetchDiscordUser(token.access_token);
 
-  await setSession({
-    userId: user.id,
-    username: user.username,
-    displayName: user.global_name ?? user.username,
-    accessToken: token.access_token,
-    expiresAt: Date.now() + token.expires_in * 1000
-  });
+    const sessionData: DashboardSession = {
+      userId: user.id,
+      username: user.username,
+      displayName: user.global_name ?? user.username,
+      accessToken: token.access_token,
+      expiresAt: Date.now() + token.expires_in * 1000
+    };
 
-  return NextResponse.redirect(new URL("/dashboard", baseUrl));
+    const signed = await signSession(sessionData);
+    const options = await getCookieOptions(7 * 24 * 60 * 60);
+
+    const response = NextResponse.redirect(new URL("/dashboard", baseUrl));
+    response.cookies.set(SESSION_COOKIE, signed, options);
+    return response;
+  } catch (error) {
+    console.error("OAuth callback error:", error);
+    return NextResponse.redirect(new URL("/?auth=error", baseUrl));
+  }
 }

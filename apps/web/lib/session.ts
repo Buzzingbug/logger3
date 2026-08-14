@@ -11,13 +11,39 @@ export type DashboardSession = {
   expiresAt: number;
 };
 
-const SESSION_COOKIE = "logger_session";
-const STATE_COOKIE = "logger_oauth_state";
+export const SESSION_COOKIE = "logger_session";
+export const STATE_COOKIE = "logger_oauth_state";
+
+export async function signSession(session: DashboardSession) {
+  return sign(JSON.stringify(session));
+}
+
+export async function verifySession(raw: string): Promise<DashboardSession | null> {
+  const payload = verify(raw);
+  if (!payload) return null;
+  try {
+    const session = JSON.parse(payload) as DashboardSession;
+    if (session.expiresAt <= Date.now()) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+export async function getCookieOptions(maxAge: number) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge
+  };
+}
 
 export async function createOAuthState() {
   const state = randomBytes(24).toString("base64url");
   const store = await cookies();
-  store.set(STATE_COOKIE, state, cookieOptions(10 * 60));
+  store.set(STATE_COOKIE, state, await getCookieOptions(10 * 60));
   return state;
 }
 
@@ -30,20 +56,14 @@ export async function consumeOAuthState(state: string | null) {
 
 export async function setSession(session: DashboardSession) {
   const store = await cookies();
-  store.set(SESSION_COOKIE, sign(JSON.stringify(session)), cookieOptions(7 * 24 * 60 * 60));
+  store.set(SESSION_COOKIE, await signSession(session), await getCookieOptions(7 * 24 * 60 * 60));
 }
 
 export async function getSession() {
   const store = await cookies();
   const value = store.get(SESSION_COOKIE)?.value;
   if (!value) return null;
-
-  const payload = verify(value);
-  if (!payload) return null;
-
-  const session = JSON.parse(payload) as DashboardSession;
-  if (session.expiresAt <= Date.now()) return null;
-  return session;
+  return verifySession(value);
 }
 
 export async function clearSession() {
@@ -72,15 +92,5 @@ function verify(value: string) {
 function secret() {
   const value = process.env.SESSION_SECRET;
   if (!value) throw new Error("SESSION_SECRET is required");
-  return value;
-}
-
-function cookieOptions(maxAge: number) {
-  return {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge
-  };
+  return value.trim().replace(/^["']|["']$/g, "");
 }
