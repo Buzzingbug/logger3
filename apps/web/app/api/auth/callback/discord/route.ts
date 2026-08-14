@@ -39,16 +39,17 @@ export async function GET(request: NextRequest) {
     const token = await exchangeCode(code);
     const user = await fetchDiscordUser(token.access_token);
 
+    const expiresInSeconds = Number(token.expires_in) || 7 * 24 * 60 * 60;
     const sessionData: DashboardSession = {
       userId: user.id,
       username: user.username,
       displayName: user.global_name ?? user.username,
       accessToken: token.access_token,
-      expiresAt: Date.now() + token.expires_in * 1000
+      expiresAt: Date.now() + expiresInSeconds * 1000
     };
 
-    const signed = await signSession(sessionData);
-    const options = await getCookieOptions(7 * 24 * 60 * 60);
+    const signed = signSession(sessionData);
+    const options = getCookieOptions(7 * 24 * 60 * 60);
 
     const response = NextResponse.redirect(new URL("/dashboard", baseUrl));
     response.cookies.set(SESSION_COOKIE, signed, options);

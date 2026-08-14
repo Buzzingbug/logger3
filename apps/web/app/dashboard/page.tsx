@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { fetchManageableGuilds, guildIconUrl, type DiscordGuild } from "../../lib/discord";
 import { getSession } from "../../lib/session";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const session = await getSession();
   if (!session) redirect("/login");
