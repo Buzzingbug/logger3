@@ -164,3 +164,11 @@ export const deliveryJobs = pgTable("delivery_jobs", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
 });
+
+export type Guild = typeof guilds.$inferSelect;
+export type GuildSetting = typeof guildSettings.$inferSelect;
+export type GuildLogRoute = typeof guildLogRoutes.$inferSelect;
+export type IgnoredEntity = typeof ignoredEntities.$inferSelect;
+export type LogEvent = typeof logEvents.$inferSelect;
+export type MessageSnapshot = typeof messageSnapshots.$inferSelect;
+export type DeliveryJob = typeof deliveryJobs.$inferSelect;
